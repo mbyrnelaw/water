@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Water Quality Guide</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: Calm Harmony -->
+    <!-- Application Structure Plan: The application is designed as a multi-step, guided diagnostic tool. This task-oriented flow (Symptom -> Diagnosis -> Testing -> Solution) was chosen because it directly mirrors a user's problem-solving journey, making the complex information from the report digestible and actionable. Instead of presenting all data at once, it reveals information contextually based on user selections, reducing cognitive load and improving usability. The structure prioritizes a clear path to a solution, which is the primary goal for a user facing this issue. -->
+    <!-- Visualization & Content Choices: Report Info -> Goal -> Viz/Presentation Method -> Interaction -> Justification -> Library/Method. 1. Off-Flavors -> Inform/Select -> Interactive Cards -> Click to select flavor -> Intuitive entry point, visually engaging. -> HTML/CSS/JS. 2. Testing Methods Comparison -> Compare -> Bar Chart + Detail Cards -> Hover for details -> Chart.js provides a quick visual comparison of cost/accuracy, while cards offer depth. -> Chart.js. 3. Purification Methods Cost/Benefit -> Compare/Recommend -> Bar Chart + Filterable Cards -> Hover for details, filtered by severity -> Chart.js visualizes cost trade-offs, making complex choices easier. -> Chart.js. This approach uses the best tool for each communication goal. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #F8F7F4;
+            color: #4A4A4A;
+        }
+        .severity-mild { background-color: #D4EDDA; color: #155724; border-color: #C3E6CB; }
+        .severity-annoying { background-color: #FFF3CD; color: #856404; border-color: #FFEEBA; }
+        .severity-warning { background-color: #FDEDD6; color: #855504; border-color: #FEE4BA; }
+        .severity-dangerous { background-color: #F8D7DA; color: #721C24; border-color: #F5C6CB; }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 700px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 350px;
+            max-height: 450px;
+        }
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 400px;
+            }
+        }
+        .step-transition {
+            transition: opacity 0.5s ease-in-out, transform 0.5s ease-in-out;
+        }
+        .step-hidden {
+            opacity: 0;
+            transform: translateY(20px);
+            display: none;
+        }
+        .nav-button.active {
+            background-color: #457B9D;
+            color: white;
+        }
+    </style>
+</head>
+<body class="antialiased">
+
+    <header class="bg-white shadow-sm sticky top-0 z-10">
+        <nav class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center py-4">
+                <div class="flex items-center space-x-2">
+                    <span class="text-2xl">💧</span>
+                    <h1 class="text-xl font-bold text-gray-800">Water Quality Guide</h1>
+                </div>
+                <div id="nav-links" class="hidden md:flex items-center space-x-2">
+                    <button data-target="step-1" class="nav-button px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-200 active">1. Symptom</button>
+                    <button data-target="step-2" class="nav-button px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-200">2. Diagnosis</button>
+                    <button data-target="step-3" class="nav-button px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-200">3. Testing</button>
+                    <button data-target="step-4" class="nav-button px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-200">4. Solution</button>
+                </div>
+                 <button id="restart-button" class="px-4 py-2 bg-red-500 text-white rounded-md text-sm font-medium hover:bg-red-600">Start Over</button>
+            </div>
+        </nav>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
+
+        <div id="app-content">
+            <!-- Step 1: Symptom Selection -->
+            <section id="step-1" class="step-transition">
+                <div class="text-center mb-10">
+                    <h2 class="text-3xl font-bold text-gray-900 sm:text-4xl">What's wrong with your water?</h2>
+                    <p class="mt-4 text-lg text-gray-600">Select the taste or smell that best describes your issue. This first step helps us narrow down the potential causes and guide you toward a solution.</p>
+                </div>
+                <div id="flavor-grid" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
+                </div>
+            </section>
+
+            <!-- Step 2: Diagnosis & Details -->
+            <section id="step-2" class="step-transition step-hidden">
+                 <div class="text-center mb-10">
+                    <h2 class="text-3xl font-bold text-gray-900 sm:text-4xl">Diagnosis: <span id="diagnosis-title" class="text-[#457B9D]"></span></h2>
+                    <p class="mt-4 text-lg text-gray-600">Here's a detailed breakdown of the selected symptom. Understanding the potential causes and risks is the first step toward finding the right solution.</p>
+                </div>
+                <div id="diagnosis-content" class="bg-white p-6 rounded-lg shadow-md">
+                </div>
+            </section>
+
+            <!-- Step 3: Testing Options -->
+            <section id="step-3" class="step-transition step-hidden">
+                <div class="text-center mb-10">
+                    <h2 class="text-3xl font-bold text-gray-900 sm:text-4xl">Testing Your Water</h2>
+                    <p class="mt-4 text-lg text-gray-600">Once you understand the potential problem, the next step is to confirm it. Below is a comparison of testing methods to help you make an informed decision based on your budget and the suspected risk level.</p>
+                </div>
+                <div id="testing-recommendation" class="mb-8 p-4 rounded-md text-center"></div>
+                <div class="bg-white p-6 rounded-lg shadow-md">
+                    <h3 class="text-2xl font-semibold text-center mb-6">Testing Method Comparison</h3>
+                    <div class="chart-container mb-8">
+                        <canvas id="testingChart"></canvas>
+                    </div>
+                    <div id="testing-details" class="grid md:grid-cols-2 gap-6">
+                    </div>
+                </div>
+            </section>
+
+            <!-- Step 4: Solutions & Remediation -->
+            <section id="step-4" class="step-transition step-hidden">
+                <div class="text-center mb-10">
+                    <h2 class="text-3xl font-bold text-gray-900 sm:text-4xl">Finding a Solution</h2>
+                    <p class="mt-4 text-lg text-gray-600">After confirming the issue, it's time to fix it. This section provides a cost-benefit analysis of common water purification methods, helping you choose the most effective and economical option for your specific needs.</p>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow-md">
+                    <h3 class="text-2xl font-semibold text-center mb-6">Purification Method Cost Comparison</h3>
+                     <div class="chart-container mb-8">
+                        <canvas id="solutionsChart"></canvas>
+                    </div>
+                    <div id="solutions-details" class="space-y-6">
+                    </div>
+                </div>
+            </section>
+        </div>
+
+    </main>
+
+    <footer class="bg-white mt-12">
+        <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8 text-center text-gray-500">
+            <p>&copy; 2025 Water Quality Guide. Information provided is for educational purposes only.</p>
+        </div>
+    </footer>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+
+            const waterData = {
+                flavors: [
+                    { id: 'chlorine', name: 'Chlorine / Bleachy', description: 'Bleach-like chemical smell/taste', causes: 'Municipal disinfection with chlorine.', severity: 'Mild', severityClass: 'severity-mild', healthRisks: 'None at low levels; can be harmful to aquatic pets.', testingRec: 'None needed for health, but can be tested. Address with filtration if desired.', details: 'A chemical or bleach-like taste is common in municipal water systems using chlorine for disinfection. While safe for humans at regulated levels (up to 4 mg/L), it can be unpleasant. The intensity can vary seasonally. It is crucial to distinguish this from a more serious chemical contamination, which would be much stronger and more persistent.' },
+                    { id: 'earthy', name: 'Earthy / Musty', description: 'Taste/smell of dirt, mold, or decay', causes: 'Organic material, bacteria, or biofilms in plumbing.', severity: 'Annoying', severityClass: 'severity-annoying', healthRisks: 'Nuisance bacteria can create conditions for harmful organisms to grow.', testingRec: 'Test for coliform bacteria to rule out sanitary contamination.', details: 'This taste is often caused by harmless, naturally occurring bacteria and organic compounds. However, it can indicate the presence of biofilms inside your pipes, which could potentially harbor more dangerous bacteria. It is a good idea to test for coliform bacteria as a precaution.' },
+                    { id: 'sweet', name: 'Sweet', description: 'Unusually sweet taste', causes: 'High mineral content (calcium, magnesium) or pH imbalance.', severity: 'Mild', severityClass: 'severity-mild', healthRisks: 'Not a direct health risk, but indicates a mineral or pH imbalance.', testingRec: 'Test pH and mineral levels to confirm the cause.', details: 'A sweet taste can be due to high concentrations of certain minerals like calcium, or an alkaline pH. While not harmful, it indicates your water is "hard" or has an imbalanced pH, which can be addressed with a water softener or neutralizer.' },
+                    { id: 'salty', name: 'Salty', description: 'Saline or salty aftertaste', causes: 'High chloride/sulfate levels from various sources (road salt, industrial waste, malfunctioning water softener).', severity: 'Annoying', severityClass: 'severity-annoying', healthRisks: 'High sulfate can have a laxative effect. High sodium is a concern for sensitive individuals. Corrosive to pipes.', testingRec: 'Professional lab test recommended to identify the source and concentration.', details: 'A salty taste is due to high concentrations of chloride ions or sulfates. Sources can be natural or man-made. High levels can be corrosive to your plumbing over time, potentially leaching other contaminants. Individuals on low-sodium diets should be cautious.' },
+                    { id: 'metallic', name: 'Metallic / Bitter', description: 'Sharp, bitter, or metallic taste', causes: 'Leaching of metals (iron, copper, zinc) from corroding pipes; low pH.', severity: 'Warning Sign', severityClass: 'severity-warning', healthRisks: 'Can indicate lead leaching from pipes, which poses serious health risks, especially to children and pregnant women.', testingRec: 'Strongly recommend professional lab testing for heavy metals (especially lead and copper).', details: 'This is a major warning sign. It indicates that metals are leaching from your plumbing. While it could be iron or copper, the primary concern is lead, a potent neurotoxin with no safe exposure level. This taste should trigger immediate, professional testing.', diagnosticQuestion: { text: 'Is the taste more noticeable when the faucet is first turned on?', yes: 'This strongly suggests the issue is with your home\'s plumbing, as metals have leached into the water while it was sitting in the pipes.', no: 'This may indicate the source of the metals is in your main water supply or well.' } },
+                    { id: 'rotten-egg', name: 'Rotten Egg', description: 'Distinctive rotten egg smell', causes: 'Hydrogen sulfide gas from sulfur bacteria; rarely, sewage contamination.', severity: 'Warning Sign', severityClass: 'severity-warning', healthRisks: 'Gas can be harmful in high concentrations in enclosed spaces. While bacteria are not typically harmful, the smell can indicate a sanitary issue.', testingRec: 'Perform initial home tests; if persistent, test for coliform bacteria to rule out sewage.', details: 'This smell is caused by hydrogen sulfide gas, produced by harmless sulfur bacteria. These bacteria can live in your well, plumbing, or water heater. While the smell is a nuisance and the gas is corrosive, it\'s important to rule out the small possibility of sewage contamination.', diagnosticQuestion: { text: 'Is the smell present in only the hot water?', yes: 'The problem is almost certainly in your water heater, where the heat accelerates the activity of sulfur bacteria.', no: 'The source is likely your well or the main plumbing system.' } },
+                    { id: 'gasoline', name: 'Gasoline / Chemical', description: 'Strong smell/taste of gasoline or chemicals', causes: 'Contamination from industrial pollutants, petroleum, or agricultural runoff.', severity: 'Dangerous', severityClass: 'severity-dangerous', healthRisks: 'Poses serious, immediate health risks. Do not consume.', testingRec: 'Immediate cessation of use and professional lab testing.', details: 'This is a clear sign of serious contamination from sources like leaking fuel tanks or industrial waste. The water is not safe to drink under any circumstances. Contact your local health authority and schedule professional testing immediately.' },
+                    { id: 'fishy', name: 'Fishy', description: 'Taste of old fish or decay', causes: 'Organic material or heavy metals (barium, cadmium).', severity: 'Dangerous', severityClass: 'severity-dangerous', healthRisks: 'Barium and cadmium are toxic at high levels.', testingRec: 'Immediate cessation of use and professional lab testing for heavy metals.', details: 'A fishy taste can be caused by organic material, but more alarmingly, it can indicate the presence of toxic heavy metals like barium or cadmium. Do not drink the water and have it professionally tested as soon as possible.' }
+                ],
+                testing: [
+                    { method: 'At-Home Test Kit', cost: 30, time: 1, accuracy: 40, scope: 'Limited (chlorine, hardness, pH, nitrates)', bestUse: 'Quick screening, peace of mind for aesthetic issues, and basic monitoring.', details: 'At-home kits are cheap and fast, offering a good first look for common, low-risk issues. However, their accuracy is limited, especially for detecting low concentrations of dangerous contaminants like lead. They are not a substitute for professional analysis when a serious health risk is suspected.' },
+                    { method: 'Professional Lab Analysis', cost: 250, time: 7, accuracy: 95, scope: 'Comprehensive (bacteria, metals, VOCs, etc.)', bestUse: 'Definitive health risk assessment and diagnosing serious off-flavors.', details: 'Professional lab testing is the gold standard. It is highly accurate and can detect a wide range of contaminants at very low levels. While more expensive and time-consuming, it is the only responsible choice when you suspect a serious health hazard like lead or chemical contamination.' }
+                ],
+                solutions: [
+                    { method: 'Boiling', initialCost: 0, annualCost: 0, effectiveness: { 'Bacteria': 'Effective', 'Chlorine': 'Ineffective', 'Lead': 'Ineffective' }, pros: 'Zero-cost, effective interim solution for microorganisms.', cons: 'Does not remove chemical contaminants or heavy metals; requires time and energy.' },
+                    { method: 'Activated Carbon Filter', initialCost: 75, annualCost: 100, effectiveness: { 'Chlorine': 'Effective', 'Taste/Odor': 'Effective', 'Lead': 'Limited' }, pros: 'Retains healthy minerals; no water waste; affordable; easy to install.', cons: 'Not as thorough as RO; does not remove all contaminants or microorganisms.' },
+                    { method: 'Reverse Osmosis (RO)', initialCost: 400, annualCost: 150, effectiveness: { 'Lead': 'Highly Effective', 'Arsenic': 'Highly Effective', 'Bacteria': 'Highly Effective', 'VOCs': 'Highly Effective' }, pros: 'Most thorough filtration available; removes a wide range of contaminants.', cons: 'Expensive; wastes water; removes healthy minerals; complex installation.' },
+                    { method: 'Distillation', initialCost: 300, annualCost: 200, effectiveness: { 'Lead': 'Highly Effective', 'Minerals': 'Highly Effective', 'Bacteria': 'Highly Effective' }, pros: 'Produces nearly 100% pure water.', cons: 'Costly method; may not fully remove certain chemicals; energy-intensive.' }
+                ]
+            };
+
+            let testingChart, solutionsChart;
+            let appState = {
+                currentStep: 'step-1',
+                selectedFlavorId: null,
+            };
+
+            const flavorGrid = document.getElementById('flavor-grid');
+            const navLinks = document.getElementById('nav-links');
+            const restartButton = document.getElementById('restart-button');
+
+            function init() {
+                renderFlavorGrid();
+                setupEventListeners();
+                updateUI();
+            }
+
+            function setupEventListeners() {
+                restartButton.addEventListener('click', resetApp);
+                navLinks.addEventListener('click', (e) => {
+                    if (e.target.matches('button')) {
+                        const targetStep = e.target.dataset.target;
+                        if (targetStep === 'step-1' || appState.selectedFlavorId) {
+                            appState.currentStep = targetStep;
+                            updateUI();
+                        }
+                    }
+                });
+            }
+
+            function renderFlavorGrid() {
+                flavorGrid.innerHTML = '';
+                waterData.flavors.forEach(flavor => {
+                    const card = document.createElement('div');
+                    card.className = `p-4 md:p-6 rounded-lg shadow-md cursor-pointer transition-transform transform hover:scale-105 border-2 ${flavor.severityClass}`;
+                    card.dataset.id = flavor.id;
+                    card.innerHTML = `
+                        <h3 class="text-lg font-semibold">${flavor.name}</h3>
+                        <p class="text-sm mt-1">${flavor.description}</p>
+                    `;
+                    card.addEventListener('click', () => selectFlavor(flavor.id));
+                    flavorGrid.appendChild(card);
+                });
+            }
+
+            function selectFlavor(id) {
+                appState.selectedFlavorId = id;
+                appState.currentStep = 'step-2';
+                updateUI();
+            }
+
+            function renderDiagnosis() {
+                const flavor = waterData.flavors.find(f => f.id === appState.selectedFlavorId);
+                if (!flavor) return;
+
+                document.getElementById('diagnosis-title').textContent = flavor.name;
+                const contentEl = document.getElementById('diagnosis-content');
+                
+                let diagnosticHTML = '';
+                if (flavor.diagnosticQuestion) {
+                    diagnosticHTML = `
+                        <div class="mt-6 p-4 bg-gray-100 rounded-lg">
+                            <p class="font-semibold mb-2">${flavor.diagnosticQuestion.text}</p>
+                            <div class="flex space-x-4">
+                                <button class="diag-btn flex-1 bg-white hover:bg-gray-200 p-2 rounded border" data-answer="yes">Yes</button>
+                                <button class="diag-btn flex-1 bg-white hover:bg-gray-200 p-2 rounded border" data-answer="no">No</button>
+                            </div>
+                            <p id="diag-result" class="mt-3 text-sm text-gray-700"></p>
+                        </div>
+                    `;
+                }
+
+                contentEl.innerHTML = `
+                    <div class="flex justify-between items-start mb-4">
+                        <h3 class="text-2xl font-semibold">${flavor.name}</h3>
+                        <span class="px-3 py-1 text-sm font-medium rounded-full ${flavor.severityClass}">${flavor.severity}</span>
+                    </div>
+                    <p class="mb-4">${flavor.details}</p>
+                    <div class="grid md:grid-cols-2 gap-4 text-sm">
+                        <div class="bg-gray-50 p-3 rounded"><strong>Primary Causes:</strong> ${flavor.causes}</div>
+                        <div class="bg-gray-50 p-3 rounded"><strong>Primary Health Risks:</strong> ${flavor.healthRisks}</div>
+                    </div>
+                    ${diagnosticHTML}
+                    <div class="text-center mt-8">
+                        <button id="to-testing-btn" class="px-6 py-3 bg-[#457B9D] text-white font-semibold rounded-lg shadow-md hover:bg-[#3b6986] transition-colors">Next: See Testing Options</button>
+                    </div>
+                `;
+
+                document.getElementById('to-testing-btn').addEventListener('click', () => {
+                    appState.currentStep = 'step-3';
+                    updateUI();
+                });
+                
+                contentEl.querySelectorAll('.diag-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const answer = e.target.dataset.answer;
+                        document.getElementById('diag-result').textContent = flavor.diagnosticQuestion[answer];
+                        contentEl.querySelectorAll('.diag-btn').forEach(b => b.classList.remove('bg-gray-300'));
+                        e.target.classList.add('bg-gray-300');
+                    });
+                });
+            }
+
+            function renderTesting() {
+                const flavor = waterData.flavors.find(f => f.id === appState.selectedFlavorId);
+                if (!flavor) return;
+
+                const recommendationEl = document.getElementById('testing-recommendation');
+                recommendationEl.className = `mb-8 p-4 rounded-md text-center font-semibold ${flavor.severityClass}`;
+                recommendationEl.innerHTML = `<strong>Testing Recommendation:</strong> ${flavor.testingRec}`;
+
+                const detailsEl = document.getElementById('testing-details');
+                detailsEl.innerHTML = waterData.testing.map(t => `
+                    <div class="bg-gray-50 p-4 rounded-lg border">
+                        <h4 class="font-bold text-lg text-[#457B9D]">${t.method}</h4>
+                        <p class="mt-2 text-sm">${t.details}</p>
+                        <p class="mt-3 text-sm"><strong>Best for:</strong> ${t.bestUse}</p>
+                    </div>
+                `).join('');
+
+                createTestingChart();
+                const btn = document.createElement('div');
+                btn.className = 'text-center mt-8';
+                btn.innerHTML = `<button id="to-solutions-btn" class="px-6 py-3 bg-[#457B9D] text-white font-semibold rounded-lg shadow-md hover:bg-[#3b6986] transition-colors">Next: Explore Solutions</button>`;
+                detailsEl.parentElement.appendChild(btn);
+                btn.addEventListener('click', () => {
+                    appState.currentStep = 'step-4';
+                    updateUI();
+                });
+            }
+            
+            function createTestingChart() {
+                const ctx = document.getElementById('testingChart').getContext('2d');
+                if (testingChart) testingChart.destroy();
+                testingChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: ['Cost ($)', 'Time (Days)', 'Accuracy (%)'],
+                        datasets: waterData.testing.map((t, i) => ({
+                            label: t.method,
+                            data: [t.cost, t.time, t.accuracy],
+                            backgroundColor: i === 0 ? 'rgba(168, 218, 220, 0.6)' : 'rgba(69, 123, 157, 0.6)',
+                            borderColor: i === 0 ? 'rgb(168, 218, 220)' : 'rgb(69, 123, 157)',
+                            borderWidth: 1
+                        }))
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: { beginAtZero: true, suggestedMax: 100 }
+                        },
+                        plugins: {
+                            title: { display: true, text: 'Testing Methods: At a Glance' },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        let label = context.dataset.label || '';
+                                        if (label) {
+                                            label += ': ';
+                                        }
+                                        if (context.parsed.y !== null) {
+                                            label += context.parsed.y;
+                                            if (context.label.includes('Cost')) label += ' (avg)';
+                                            if (context.label.includes('Time')) label += ' (avg)';
+                                            if (context.label.includes('Accuracy')) label += '%';
+                                        }
+                                        return label;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            function renderSolutions() {
+                const detailsEl = document.getElementById('solutions-details');
+                detailsEl.innerHTML = waterData.solutions.map(s => `
+                    <div class="bg-gray-50 p-4 rounded-lg border">
+                        <h4 class="font-bold text-lg text-[#457B9D]">${s.method}</h4>
+                        <div class="grid md:grid-cols-2 gap-4 mt-2 text-sm">
+                            <div><strong>Pros:</strong> ${s.pros}</div>
+                            <div><strong>Cons:</strong> ${s.cons}</div>
+                            <div>
+                                <strong>Effectiveness:</strong>
+                                <ul class="list-disc list-inside ml-2 mt-1">
+                                    ${Object.entries(s.effectiveness).map(([key, value]) => `<li><strong>${key}:</strong> ${value}</li>`).join('')}
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+                createSolutionsChart();
+            }
+            
+            function createSolutionsChart() {
+                const ctx = document.getElementById('solutionsChart').getContext('2d');
+                if (solutionsChart) solutionsChart.destroy();
+                solutionsChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: waterData.solutions.map(s => s.method),
+                        datasets: [
+                            {
+                                label: 'Initial Cost ($)',
+                                data: waterData.solutions.map(s => s.initialCost),
+                                backgroundColor: 'rgba(168, 218, 220, 0.6)',
+                                borderColor: 'rgb(168, 218, 220)',
+                                borderWidth: 1
+                            },
+                            {
+                                label: 'Annual Maintenance ($)',
+                                data: waterData.solutions.map(s => s.annualCost),
+                                backgroundColor: 'rgba(69, 123, 157, 0.6)',
+                                borderColor: 'rgb(69, 123, 157)',
+                                borderWidth: 1
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: { beginAtZero: true, title: { display: true, text: 'Cost in USD ($)' } }
+                        },
+                        plugins: {
+                            title: { display: true, text: 'Purification Costs: Initial vs. Annual' },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        let label = context.dataset.label || '';
+                                        if (label) { label += ': '; }
+                                        if (context.parsed.y !== null) {
+                                            label += new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(context.parsed.y);
+                                        }
+                                        return label;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            function updateUI() {
+                document.querySelectorAll('section').forEach(sec => {
+                    if (sec.id === appState.currentStep) {
+                        sec.classList.remove('step-hidden');
+                    } else {
+                        sec.classList.add('step-hidden');
+                    }
+                });
+
+                document.querySelectorAll('.nav-button').forEach(btn => {
+                    if (btn.dataset.target === appState.currentStep) {
+                        btn.classList.add('active');
+                    } else {
+                        btn.classList.remove('active');
+                    }
+                });
+
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+
+                switch (appState.currentStep) {
+                    case 'step-2':
+                        renderDiagnosis();
+                        break;
+                    case 'step-3':
+                        renderTesting();
+                        break;
+                    case 'step-4':
+                        renderSolutions();
+                        break;
+                }
+            }
+
+            function resetApp() {
+                appState.currentStep = 'step-1';
+                appState.selectedFlavorId = null;
+                const toSolutionsBtn = document.getElementById('to-solutions-btn');
+                if (toSolutionsBtn) toSolutionsBtn.parentElement.remove();
+                updateUI();
+            }
+
+            init();
+        });
+    </script>
+</body>
+</html>
